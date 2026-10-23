@@ -307,6 +307,13 @@ export interface SessionCreateValue {
 /** Session model-selection request. */
 export interface SessionSelectModelRequest extends ModelSelection {
   readonly sessionId: SessionId
+  /**
+   * Also save the accepted selection as this deployment's default model for later Sessions.
+   * Omitted keeps the selection Session-local, so programmatic callers never rewrite the default
+   * for Sessions they do not own; the Web composer passes `true` because choosing a model there
+   * is how this deployment's default is chosen.
+   */
+  readonly saveDefault?: boolean
 }
 
 /** Accepted model selection after Host resolution. */

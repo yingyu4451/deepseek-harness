@@ -638,7 +638,7 @@ describe('Web session model selection', () => {
 
     for (const model of ['deepseek-reasoner', 'deepseek-chat']) {
       let returned = false
-      const operation = remote.selectModel({ sessionId, provider: 'deepseek-official', model })
+      const operation = remote.selectModel({ sessionId, provider: 'deepseek-official', model, saveDefault: true })
         .then((result) => { expectValue(result); returned = true })
       operations.push(operation)
       await expect.poll(() => returned).toBe(true)
@@ -663,21 +663,21 @@ describe('Web session model selection', () => {
     })
 
     expectValue(await remote.selectModel(request({
-      sessionId, provider: 'deepseek-official', model: 'deepseek-reasoner', reasoningEffort: 'max',
+      sessionId, provider: 'deepseek-official', model: 'deepseek-reasoner', reasoningEffort: 'max', saveDefault: true,
     })))
     expect(saved).toEqual([
       { provider: 'deepseek-official', model: 'deepseek-reasoner', reasoningEffort: 'max' },
     ])
 
     // A refused selection never becomes anyone's default.
-    await remote.selectModel(request({ sessionId, provider: 'missing', model: 'model' }))
+    await remote.selectModel(request({ sessionId, provider: 'missing', model: 'model', saveDefault: true }))
     expect(saved).toHaveLength(1)
 
     // Storage failing is not the selection failing: the switch already applies
     // to this session, so the call still succeeds.
     reject = true
     const stillAccepted = expectValue(await remote.selectModel(request({
-      sessionId, provider: 'deepseek-official', model: 'deepseek-chat',
+      sessionId, provider: 'deepseek-official', model: 'deepseek-chat', saveDefault: true,
     })))
     expect(stillAccepted.selected).toEqual({ provider: 'deepseek-official', model: 'deepseek-chat', reasoningEffort: 'high' })
     expect(currentSelection(ctx, sessionId))
@@ -685,6 +685,36 @@ describe('Web session model selection', () => {
     await expect.poll(() => warn.mock.calls).toContainEqual([
       'session-controller: model selection changed for the Session but the default was not saved: Error: read-only document',
     ])
+    await ctx.fiber.dispose()
+  })
+
+  it('keeps the deployment default for a caller that does not ask to save it', async () => {
+    const { ctx, sessionId } = await harness()
+    const saved: unknown[] = []
+    const remote = createSessionTestRemote(ctx, {
+      defaultModelSelection: () => ({ provider: 'deepseek-official', model: 'deepseek-chat' }),
+      saveDefaultModelSelection: (selection) => {
+        saved.push(selection)
+        return Promise.resolve()
+      },
+      cwd: '/tmp',
+    })
+
+    // A plugin or integration switching its own Session must not redirect the
+    // model that later Sessions start from.
+    const accepted = expectValue(await remote.selectModel(request({
+      sessionId, provider: 'deepseek-official', model: 'deepseek-reasoner', reasoningEffort: 'max',
+    })))
+    expect(accepted.selected)
+      .toEqual({ provider: 'deepseek-official', model: 'deepseek-reasoner', reasoningEffort: 'max' })
+    expect(currentSelection(ctx, sessionId))
+      .toEqual({ provider: 'deepseek-official', model: 'deepseek-reasoner', reasoningEffort: 'max' })
+    expect(saved).toHaveLength(0)
+
+    expectValue(await remote.selectModel(request({
+      sessionId, provider: 'deepseek-official', model: 'deepseek-chat', saveDefault: true,
+    })))
+    expect(saved).toHaveLength(1)
     await ctx.fiber.dispose()
   })
 

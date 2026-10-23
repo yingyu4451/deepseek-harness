@@ -102,6 +102,8 @@ export class ModelDirectory {
       ...selection.reasoningEffort === undefined
         ? {}
         : { reasoningEffort: selection.reasoningEffort },
+      // Choosing a model in the GUI is how this deployment's default is chosen for later Sessions.
+      saveDefault: true,
     })
     if (this.disposed || generation !== this.generation) {
       return result.ok ? { ok: true, value: undefined } : result
